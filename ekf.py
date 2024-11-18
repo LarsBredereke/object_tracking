@@ -1,6 +1,5 @@
-# from memory_profiler import profile
-from util import load_bytesio, get_aux_json, get_aux_config, dirname_for_upload
 import sys
+from config import sessions
 
 # @profile
 def process(session):
@@ -15,13 +14,10 @@ def process(session):
     import tensorflow as tf
     # from mpl_toolkits.mplot3d import Axes3D
     from scipy.spatial.transform import Rotation
-    from object_tracking_constants import alpha, groundtruth_w, predifined_classes, img_shape
-    from object_tracking_constants import all_camera_names as all_camera_names_gt # all camera names that could exist
+    from config import alpha, groundtruth_w, predifined_classes, img_shape, trials
+    from config import all_camera_names as all_camera_names_gt # all camera names that could exist
     from typing import Dict
     import tempfile
-    import boto3
-    import awswrangler as wr
-    import lakefs_config as cfg
     import yaml
     from functools import lru_cache
 
@@ -120,8 +116,9 @@ def process(session):
         
     @lru_cache(maxsize=6) 
     def get_params_for_cam(session, trial, camera_name=None):
-        f_obj = load_bytesio(f'{cfg.upload_branch}/s{str(session).zfill(3)}/t{str(trial).zfill(2)}/s{str(session).zfill(3)}t{str(trial).zfill(2)}.mocap.objecttracking.cameraposes.yaml')
-        params_dict = yaml.safe_load(f_obj)
+        path_prefix = f'data/{session}/{trial}/s{str(session).zfill(3)}t{str(trial).zfill(2)}.'
+        with open(f'{path_prefix}mocap.objecttracking.cameraposes.yaml') as f:
+                params_dict = yaml.safe_load(f)
         # print(params_dict.keys())
         if not (camera_name is None):
             x = params_dict[camera_name]
@@ -133,9 +130,10 @@ def process(session):
     def get_detections(session, trial):
         yolo_detections = {}
         print(f'downloading detections for session {session}, trial {trial}')
+        path_prefix = f'data/{session}/{trial}/s{str(session).zfill(3)}t{str(trial).zfill(2)}.'
         for camera_name in all_camera_names:
-            f_obj = load_bytesio(f'{cfg.upload_branch}/s{str(session).zfill(3)}/t{str(trial).zfill(2)}/s{str(session).zfill(3)}t{str(trial).zfill(2)}.mocap.objecttracking.{camera_name}.yolodetections.yaml')
-            yolo_detections[camera_name] = yaml.safe_load(f_obj)
+            with open(f'{path_prefix}mocap.objecttracking.{camera_name}.yolodetections.yaml') as f:
+                yolo_detections[camera_name] = yaml.safe_load(f)
         return yolo_detections
             
     line_scale = 5 # num meters the points defining a detection line are apart
@@ -307,16 +305,9 @@ def process(session):
                 points.append(detection_point)
         return points
 
-    wr.config.s3_endpoint_url = cfg.endpoint
-
-    s3 = boto3.client('s3',
-        endpoint_url=cfg.endpoint,
-        aws_access_key_id=cfg.key,
-        aws_secret_access_key=cfg.secret,
-        )
-
-    for trial in bounds[session].keys():
+    for trial in trials:
         print(f'processing session {session} trial {trial}')
+        path_prefix = f'data/{session}/{trial}/s{str(session).zfill(3)}t{str(trial).zfill(2)}.'
         try:
             all_camera_names = [name for name in get_params_for_cam(session, trial) if name in all_camera_names_gt] # find out which cameras are usable
         except:
@@ -439,11 +430,7 @@ def process(session):
         plt.ylim([1.5, -1.7])
         plt.legend(loc='lower left', bbox_to_anchor=(0.8,-0.1))
         plt.title('trajectories over whole trial')
-        with tempfile.NamedTemporaryFile(suffix='.png') as plot_file:
-            plt.savefig(plot_file.name)
-            upload_path = f'{dirname_for_upload(session, trial, False)}.mocap.objecttracking.3dtrajetories.png'
-            s3.upload_file(plot_file.name, cfg.repo, upload_path)
-            print(f'wrote {upload_path}')
+        plt.savefig(path_prefix + 'mocap.objecttracking.3dtrajetories.png')
             
         # plot all object positions near end of trial in png file to quickly visualize results
         plt.clf()
@@ -464,29 +451,14 @@ def process(session):
         plt.xlim([1.5, -2.3])
         plt.ylim([1.5, -1.7])
         plt.title('object positions near end of trial')
-        with tempfile.NamedTemporaryFile(suffix='.png') as plot_file:
-            plt.savefig(plot_file.name)
-            upload_path = f'{dirname_for_upload(session, trial, False)}.mocap.objecttracking.finalpositions.png'
-            s3.upload_file(plot_file.name, cfg.repo, upload_path)
-            print(f'wrote {upload_path}')
+        plt.savefig(path_prefix + 'mocap.objecttracking.finalpositions.png')
         plt.clf()
             
         # write trajectories to lakefs
-        upload_path = f'{dirname_for_upload(session, trial, False)}.mocap.objecttracking.3dtrajetories.yaml'
-        s3.put_object(Body=bytes(yaml.dump(smoothed_trajectories, default_flow_style=False, sort_keys=False).encode('UTF-8')), Bucket=cfg.repo, Key=upload_path)
-        print(f'wrote {upload_path}')
-
+        with open(path_prefix + 'mocap.objecttracking.3dtrajetories.yaml', 'w') as outfile:
+            yaml.dump(smoothed_trajectories, outfile, default_flow_style=False, sort_keys=False)
         tf.keras.backend.clear_session() # memory leak?
 
 if __name__ == '__main__':
-    bounds = get_aux_json('bounds')
-    scope = get_aux_config()
-
-    # abort if this Sensor is not selected in scope_config.json
-    assert('ObjectTrackingEKF' in scope["sensors_out"])
-
-    session = sys.argv[1]
-    if session in bounds.keys():
+    for session in sessions:
         process(session)
-    else:
-        print('skipping session', session)

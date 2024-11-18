@@ -1,0 +1,158 @@
+table-side:
+  counter:
+    ul:
+    - 764
+    - 196
+    ur: null
+    lr:
+    - 1204
+    - 237
+    ll:
+    - 774
+    - 229
+  table:
+    ul:
+    - 399
+    - 386
+    ur:
+    - 1007
+    - 399
+    lr:
+    - 1174
+    - 631
+    ll:
+    - 244
+    - 599
+  origin:
+    ul: null
+table-top:
+  counter:
+    ul: null
+    ur: null
+    lr: null
+    ll: null
+  table:
+    ul:
+    - 882
+    - 516
+    ur:
+    - 288
+    - 539
+    lr:
+    - 287
+    - 240
+    ll:
+    - 869
+    - 231
+  origin:
+    ul:
+    - 385
+    - 609
+back:
+  counter:
+    ul: null
+    ur:
+    - 1162
+    - 567
+    lr:
+    - 968
+    - 591
+    ll:
+    - 793
+    - 216
+  table:
+    ul:
+    - 464
+    - 108
+    ur:
+    - 450
+    - 310
+    lr:
+    - 225
+    - 322
+    ll:
+    - 302
+    - 112
+  origin:
+    ul:
+    - 558
+    - 418
+counter-top:
+  counter:
+    ul:
+    - 1044
+    - 623
+    ur:
+    - 294
+    - 639
+    lr:
+    - 301
+    - 389
+    ll:
+    - 1026
+    - 374
+  table:
+    ul: null
+    ur: null
+    lr: null
+    ll: null
+  origin:
+    ul:
+    - 784
+    - 99
+ceiling:
+  counter:
+    ul:
+    - 737
+    - 690
+    ur:
+    - 413
+    - 680
+    lr:
+    - 414
+    - 572
+    ll:
+    - 735
+    - 579
+  table:
+    ul:
+    - 947
+    - 308
+    ur:
+    - 648
+    - 314
+    lr:
+    - 647
+    - 168
+    ll:
+    - 946
+    - 157
+  origin:
+    ul:
+    - 666
+    - 374
+front:
+  counter:
+    ul: null
+    ur: null
+    lr:
+    - 356
+    - 212
+    ll:
+    - 175
+    - 422
+  table:
+    ul: null
+    ur:
+    - 658
+    - 321
+    lr:
+    - 882
+    - 304
+    ll:
+    - 1144
+    - 700
+  origin:
+    ul:
+    - 576
+    - 492

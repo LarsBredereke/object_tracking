@@ -1,7 +1,4 @@
-from util import create_boto3_client, load_bytesio, get_aux_json, get_aux_config, dirname_for_upload
-
-bounds = get_aux_json('bounds')
-scope = get_aux_config()
+from config import sessions
 
 def process_session(session):
     print('processing session', session)
@@ -10,8 +7,8 @@ def process_session(session):
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Stop spam from tensorflow
     os.environ['CUDA_VISIBLE_DEVICES'] = '-1' # dont use gpu because it leads to jit compilation error
 
-    import lakefs_config as cfg
-    from object_tracking_constants import xdof, alpha, corners, groundtruth_w, all_camera_names as all_camera_names_gt
+    from config import xdof, alpha, corners, groundtruth_w, all_camera_names as all_camera_names_gt, trials
+    import config
     from d3bv import camera_model, c_in_W
 
     import tensorflow as tf
@@ -44,12 +41,13 @@ def process_session(session):
 
     @lru_cache(maxsize=None) 
     def get_pix_pos(session, trial):
-        f_obj = load_bytesio(f'{dirname_for_upload(session, trial, False)}.mocap.objecttracking.imageannotations.yaml')
-        return yaml.safe_load(f_obj)
+        path_prefix = f'data/{session}/{trial}/s{str(session).zfill(3)}t{str(trial).zfill(2)}.'
+        with open(f'{path_prefix}mocap.objecttracking.imageannotations.yaml') as f:
+            return yaml.safe_load(f)
 
     # these values are just so tensorflow can compile @tf.function
     found_annotation = False
-    for trial in bounds[session].keys():
+    for trial in trials:
         try:
             pix_pos_by_cam = get_pix_pos(session, trial)
             all_camera_names = list(pix_pos_by_cam.keys())
@@ -117,9 +115,8 @@ def process_session(session):
         out = (y, tape.jacobian(y, x))
         return out
 
-    s3_client = create_boto3_client()
     xHat = None
-    for trial in bounds[session].keys():
+    for trial in trials:
         print(f'processing session {session} trial {trial}')
         try:
             all_camera_names = list(get_pix_pos(session, trial).keys())
@@ -141,13 +138,14 @@ def process_session(session):
                 #x,y,z, a_pan, a_tilt, a_roll
                 xHat_dict[camera_name] = {'x': params[0], 'y': params[1], 'z': params[2], 'a_pan': params[3], 'a_tilt': params[4], 'a_roll': params[5]}
             xHat_dict['table-offsets-to-correct-position'] = {'table_x': xHat[-4].numpy().tolist(), 'table_y': xHat[-3].numpy().tolist(), 'counter_x': xHat[-2].numpy().tolist(), 'counter_y': xHat[-1].numpy().tolist()}
-            upload_path = f'{dirname_for_upload(session, trial, False)}.mocap.objecttracking.cameraposes.yaml'
-            s3_client.put_object(Body=bytes(yaml.dump(xHat_dict, default_flow_style=False, sort_keys=False).encode('UTF-8')), Bucket=cfg.repo, Key=upload_path)
-            print(f'wrote {upload_path}')
-
-# abort if this Sensor is not selected in scope_config.json
-assert('ObjectTrackingCameraParams' in scope["sensors_out"])
+            path_prefix = f'data/{session}/{trial}/s{str(session).zfill(3)}t{str(trial).zfill(2)}.'
+            upload_path = f'{path_prefix}mocap.objecttracking.cameraposes.yaml'
+            with open(upload_path, 'w') as outfile:
+                yaml.dump(xHat_dict, outfile, default_flow_style=False, sort_keys=False)
+                print('wrote', upload_path)
+        else:
+            print(f'rmse of {rmse} is too high for accurate tracing, maybe annotations are too inaccurate?')
 
 if __name__ == '__main__':
-    for session in bounds.keys():
+    for session in sessions:
         process_session(session)
